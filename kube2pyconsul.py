@@ -125,7 +125,7 @@ def registration(queue):
 
                     if service != "K8s" and service != "NEXP":
                         r = ''
-                        agent_base = "https://" + service['Address'] + ":8500"
+                        agent_base = "http://" + service['Address'] + ":8500"
                         while True:
                             try:
                                 if consul_token:
@@ -160,7 +160,7 @@ def registration(queue):
                 for ports in event['object']['spec']['ports']:
                     service = getservice(event, ports)
                     r = ''
-                    agent_base = "https://" + service['Address'] + ":8500"
+                    agent_base = "http://" + service['Address'] + ":8500"
                     while True:
                         try:
                             if consul_token:
