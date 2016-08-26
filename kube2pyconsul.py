@@ -75,6 +75,23 @@ def getservice(event, ports):
         return "NEXP"
 
 
+def get_kube_hosts():
+    request_url = kubeapi_uri + '/api/v1/nodes'
+    while True:
+        try:
+            ip_list = {}
+            r = requests.get(request_url, verify=verify_ssl, auth=kube_auth)
+            nodes = json.loads(r.content)
+            for hosts in nodes['items']:
+                ip_list['IP'] = hosts['status']['addresses'][0]['address']
+            break
+        except Exception as e:
+            log.debug(traceback.format_exc())
+            log.error(e)
+            log.error("Error getting nodes from KubeAPI. restarting.")
+            time.sleep(10)
+
+
 def services_monitor(queue):
     while True:
         try:
