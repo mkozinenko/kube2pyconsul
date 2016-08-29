@@ -177,35 +177,36 @@ def registration(queue):
                         log.info("Service is not exposed. Skipping registration.")
 
             elif event['type'] == 'DELETED':
-                for ports in event['object']['spec']['ports']:
-                    service = getservice(event, ports)
-                    r = ''
-                    agent_base = consul_uri
-                    while True:
-                        try:
-                            if consul_token:
-                                r = requests.post('{base}/v1/agent/service/deregister/{id}?token={token}'
-                                                  .format(base=agent_base, id=service['ID'],
-                                                          port=str(service['Port']), token=consul_token),
-                                                  auth=consul_auth, verify=verify_ssl)
-                            else:
-                                r = requests.post('{base}/v1/agent/service/deregister/{id}'
-                                                  .format(base=agent_base, id=service['ID'],
-                                                          port=str(service['Port'])),
-                                                  auth=consul_auth, verify=verify_ssl)
-                            break
-                        except Exception as e:
-                            log.debug(traceback.format_exc())
-                            log.error(e)
-                            log.error("Sleeping and retrying.")
-                            time.sleep(10)
-                            
-                    if r.status_code == 200:
-                        log.info("DELETED service {service} from Consul's catalog".format(service=service))
-                    else:
-                        log.error("Consul returned non-200 request status code. Could not deregister service {service}."
-                                  " Continuing on to the next service...".format(service=service))
-                    sys.stdout.flush()
+                pass
+#                for ports in event['object']['spec']['ports']:
+#                    service = getservice(event, ports)
+#                    r = ''
+#                    agent_base = consul_uri
+#                    while True:
+#                        try:
+#                            if consul_token:
+#                                r = requests.post('{base}/v1/agent/service/deregister/{id}?token={token}'
+#                                                  .format(base=agent_base, id=service['ID'],
+#                                                          port=str(service['Port']), token=consul_token),
+#                                                  auth=consul_auth, verify=verify_ssl)
+#                            else:
+#                                r = requests.post('{base}/v1/agent/service/deregister/{id}'
+#                                                  .format(base=agent_base, id=service['ID'],
+#                                                          port=str(service['Port'])),
+#                                                  auth=consul_auth, verify=verify_ssl)
+#                            break
+#                        except Exception as e:
+#                            log.debug(traceback.format_exc())
+#                            log.error(e)
+#                            log.error("Sleeping and retrying.")
+#                            time.sleep(10)
+#
+#                    if r.status_code == 200:
+#                        log.info("DELETED service {service} from Consul's catalog".format(service=service))
+#                    else:
+#                        log.error("Consul returned non-200 request status code. Could not deregister service {service}."
+#                                  " Continuing on to the next service...".format(service=service))
+#                    sys.stdout.flush()
                       
         elif context == 'pod':
             pass
