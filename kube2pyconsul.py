@@ -63,7 +63,6 @@ def get_kube_hosts():
             for index, hosts in enumerate(nodes['items']):
                 ip_list[index] = hosts['status']['addresses'][0]['address']
             return ip_list
-            break
         except Exception as e:
             log.debug(traceback.format_exc())
             log.error(e)
@@ -71,15 +70,31 @@ def get_kube_hosts():
             time.sleep(10)
 
 
-def getservice(event, ports):
+def get_service(event):
     if event['object']['metadata']['name'] == "kubernetes":
         return "K8s"
     elif 'nodePort' in event['object']['spec']['ports'][0]:
         hosts = get_kube_hosts()
         resp = {}
         for index, host in enumerate(hosts):
-            resp[hosts[index]] = 'http://' + str(hosts[index]) + ':' + str(event['object']['spec']['ports'][0]['nodePort'])
+            resp[hosts[index]] = 'http://' + str(hosts[index]) + ':' + \
+                                 str(event['object']['spec']['ports'][0]['nodePort'])
         return json.dumps(resp)
+    else:
+        return "NEXP"
+
+
+def get_weight_label(event):
+    if event['object']['metadata']['name'] == "kubernetes":
+        return "K8s"
+    elif 'nodePort' in event['object']['spec']['ports'][0]:
+        key, value = event['object']['spec']['selector'].items()[0]
+        r = requests.get('{base}/api/v1/pods?labelSelector={key}={value}'.format(base=kubeapi_uri,
+                                                                                 key=key, value=value),
+                         auth=kube_auth, verify=verify_ssl)
+        pod_dict = json.loads(r.content)
+        resp = int(pod_dict['items'][0]['metadata']['labels']['weight'])
+        return resp
     else:
         return "NEXP"
 
@@ -103,7 +118,7 @@ def services_monitor(queue):
 def pods_monitor(queue):
     while True:
         try:
-            r = requests.get('{base}/api/v1/pods?watch=true'.format(base=kubeapi_uri), 
+            r = requests.get('{base}/api/v1/pods?watch=true'.format(base=kubeapi_uri),
                              stream=True, verify=verify_ssl, auth=kube_auth)
             for line in r.iter_lines():
                 if line:
@@ -121,92 +136,99 @@ def registration(queue):
         context, event = queue.get(block=True)
         if context == 'service':
             if event['type'] == 'ADDED':
-                for ports in event['object']['spec']['ports']:
+                while True:
+                    try:
+                        service = get_service(event)
+                        break
+                    except Exception as e:
+                        log.debug(traceback.format_exc())
+                        log.error(e)
+                        log.error("Seems POD is not started yet. Sleeping and retrying.")
+                        time.sleep(5)
+
+                if service != "K8s" and service != "NEXP":
+                    r = ''
+                    agent_base = consul_uri
+                    app = event['object']['metadata']['name']
+                    weight = get_weight_label(event)
                     while True:
                         try:
-                            service = getservice(event, ports)
+                            service_dict = json.loads(service)
+                            if consul_token:
+                                for hosts in service_dict:
+                                    r = requests.put(
+                                        '{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url?token='
+                                        '{token}'.format(base=agent_base, token=consul_token,
+                                                         traefik=traefik_path, app_name=app, host=hosts),
+                                        json=service_dict[hosts], auth=consul_auth, verify=verify_ssl,
+                                        allow_redirects=True)
+                                    r = requests.put(
+                                        '{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/weight?token='
+                                        '{token}'.format(base=agent_base, token=consul_token,
+                                                         traefik=traefik_path, app_name=app, host=hosts),
+                                        json=weight, auth=consul_auth, verify=verify_ssl,
+                                        allow_redirects=True)
+                            else:
+                                for hosts in service_dict:
+                                    print hosts
+                                    r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url'
+                                                     .format(base=agent_base, traefik=traefik_path,
+                                                             app_name=app, host=hosts),
+                                                     json=service_dict[hosts], auth=consul_auth,
+                                                     verify=verify_ssl, allow_redirects=True)
+                                    r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/weight'
+                                                     .format(base=agent_base, traefik=traefik_path,
+                                                             app_name=app, host=hosts),
+                                                     json=weight, auth=consul_auth,
+                                                     verify=verify_ssl, allow_redirects=True)
                             break
                         except Exception as e:
                             log.debug(traceback.format_exc())
                             log.error(e)
-                            log.error("Seems POD is not started yet. Sleeping and retrying.")
-                            time.sleep(5)
+                            log.error("Sleeping and retrying.")
+                            time.sleep(10)
 
-                    if service != "K8s" and service != "NEXP":
-                        r = ''
-                        agent_base = consul_uri
-                        app = event['object']['metadata']['name']
-                        while True:
-                            try:
-                                service_dict = json.loads(service)
-                                print service_dict
-                                if consul_token:
-                                    for hosts in service_dict:
-                                        print hosts
-                                        r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url?token={token}'
-                                                         .format(base=agent_base, token=consul_token,
-                                                                 traefik=traefik_path, app_name=app,
-                                                                 host=hosts),
-                                                         json=service_dict[hosts], auth=consul_auth, verify=verify_ssl,
-                                                         allow_redirects=True)
-                                else:
-                                    for hosts in service_dict:
-                                        print hosts
-                                        r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url'
-                                                         .format(base=agent_base,
-                                                                 traefik=traefik_path, app_name=app,
-                                                                 host=hosts),
-                                                         json=service_dict[hosts], auth=consul_auth, verify=verify_ssl,
-                                                         allow_redirects=True)
-                                break
-                            except Exception as e:
-                                log.debug(traceback.format_exc())
-                                log.error(e)
-                                log.error("Sleeping and retrying.")
-                                time.sleep(10)
-
-                        if r.status_code == 200:
-                            log.info("ADDED service {service} to Consul's catalog".format(service=service))
-                        else:
-                            log.error("Consul returned non-200 request status code. Could not register service "
-                                      "{service}. Continuing on to the next service...".format(service=service))
-                        sys.stdout.flush()
-                    elif service == "K8s":
-                        log.info("Skipping K8s service registration...")
+                    if r.status_code == 200:
+                        log.info("ADDED service {service} to Consul's catalog".format(service=app))
                     else:
-                        log.info("Service is not exposed. Skipping registration.")
+                        log.error("Consul returned non-200 request status code. Could not register service "
+                                  "{service}. Continuing on to the next service...".format(service=app))
+                    sys.stdout.flush()
+                elif service == "K8s":
+                    log.info("Skipping K8s service registration...")
+                else:
+                    log.info("Service is not exposed. Skipping registration.")
 
             elif event['type'] == 'DELETED':
                 pass
-#                for ports in event['object']['spec']['ports']:
-#                    service = getservice(event, ports)
-#                    r = ''
-#                    agent_base = consul_uri
-#                    while True:
-#                        try:
-#                            if consul_token:
-#                                r = requests.post('{base}/v1/agent/service/deregister/{id}?token={token}'
-#                                                  .format(base=agent_base, id=service['ID'],
-#                                                          port=str(service['Port']), token=consul_token),
-#                                                  auth=consul_auth, verify=verify_ssl)
-#                            else:
-#                                r = requests.post('{base}/v1/agent/service/deregister/{id}'
-#                                                  .format(base=agent_base, id=service['ID'],
-#                                                          port=str(service['Port'])),
-#                                                  auth=consul_auth, verify=verify_ssl)
-#                            break
-#                        except Exception as e:
-#                            log.debug(traceback.format_exc())
-#                            log.error(e)
-#                            log.error("Sleeping and retrying.")
-#                            time.sleep(10)
+#                service = get_service(event)
+#                r = ''
+#                agent_base = consul_uri
+#                while True:
+#                    try:
+#                        if consul_token:
+#                            r = requests.post('{base}/v1/agent/service/deregister/{id}?token={token}'
+#                                              .format(base=agent_base, id=service['ID'],
+#                                                      port=str(service['Port']), token=consul_token),
+#                                              auth=consul_auth, verify=verify_ssl)
+#                        else:
+#                            r = requests.post('{base}/v1/agent/service/deregister/{id}'
+#                                              .format(base=agent_base, id=service['ID'],
+#                                                      port=str(service['Port'])),
+#                                              auth=consul_auth, verify=verify_ssl)
+#                        break
+#                    except Exception as e:
+#                        log.debug(traceback.format_exc())
+#                        log.error(e)
+#                        log.error("Sleeping and retrying.")
+#                        time.sleep(10)
 #
-#                    if r.status_code == 200:
-#                        log.info("DELETED service {service} from Consul's catalog".format(service=service))
-#                    else:
-#                        log.error("Consul returned non-200 request status code. Could not deregister service {service}."
-#                                  " Continuing on to the next service...".format(service=service))
-#                    sys.stdout.flush()
+#                if r.status_code == 200:
+#                    log.info("DELETED service {service} from Consul's catalog".format(service=service))
+#                else:
+#                    log.error("Consul returned non-200 request status code. Could not deregister service {service}. "
+#                              "Continuing on to the next service...".format(service=service))
+#                sys.stdout.flush()
                       
         elif context == 'pod':
             pass
