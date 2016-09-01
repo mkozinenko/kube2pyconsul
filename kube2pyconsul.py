@@ -189,10 +189,12 @@ def registration(queue):
                         agent_base = consul_uri
                         if consul_token:
                             for service in services:
+                                port = get_node_port(service)
+                                url = 'http://' + node_ip + ':' + port
                                 r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url?token='
                                                  '{token}'.format(base=agent_base, token=consul_token,
                                                                   traefik=traefik_path, app_name=service, host=node_ip),
-                                                 json=service_dict[hosts], auth=consul_auth, verify=verify_ssl,
+                                                 json=url, auth=consul_auth, verify=verify_ssl,
                                                  allow_redirects=True)
                         else:
                             pass
