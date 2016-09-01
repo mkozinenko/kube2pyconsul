@@ -84,6 +84,14 @@ def get_service(event):
         return "NEXP"
 
 
+def get_node_port(appname):
+    r = requests.get('{base}/api/v1/services?fieldSelector="metadata.name"={value}'.format(base=kubeapi_uri,
+                                                                                           value=appname))
+    service_dict = json.loads(r.content)
+    node_port = service_dict['spec']['ports'][0]['nodePort']
+    return node_port
+
+
 def get_weight_label(event):
     if event['object']['metadata']['name'] == "kubernetes":
         return "K8s"
@@ -131,73 +139,77 @@ def pods_monitor(queue):
             time.sleep(10)
 
 
+def nodes_monitor(queue):
+    while True:
+        try:
+            r = requests.get('{base}/api/v1/nodes?watch=true'.format(base=kubeapi_uri),
+                             stream=True, verify=verify_ssl, auth=kube_auth)
+            for line in r.iter_lines():
+                if line:
+                    event = json.loads(line)
+                    queue.put(('node', event))
+        except Exception as e:
+            log.debug(traceback.format_exc())
+            log.error(e)
+            log.error("Sleeping and restarting afresh.")
+            time.sleep(10)
+
+
+def get_node_ip(event):
+    return event['object']['status']['addresses'][0]['address']
+
+
+def get_service_list():
+    while True:
+        try:
+            r = requests.get('{base}/api/v1/services'.format(base=kubeapi_uri), verify=verify_ssl, auth=kube_auth)
+            services_dict = json.loads(r.content)
+            list_def = {}
+            for index, service in enumerate(services_dict['items']):
+                list_def[index] = services_dict['items'][index]['metadata']['name']
+            return json.dumps(list_def)
+        except Exception as e:
+            log.debug(traceback.format_exc())
+            log.error(e)
+            log.error("Sleeping and restarting afresh.")
+            time.sleep(10)
+
+
 def registration(queue):
     while True:
         context, event = queue.get(block=True)
-        if context == 'service':
+        if context == 'node':
             if event['type'] == 'ADDED':
+                r = ''
                 while True:
                     try:
-                        service = get_service(event)
+                        node_ip = get_node_ip(event)
+                        services = json.loads(get_service_list())
+                        service_dict = json.loads(get_service(event))
+                        agent_base = consul_uri
+                        if consul_token:
+                            for service in services:
+                                r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url?token='
+                                                 '{token}'.format(base=agent_base, token=consul_token,
+                                                                  traefik=traefik_path, app_name=service, host=node_ip),
+                                                 json=service_dict[hosts], auth=consul_auth, verify=verify_ssl,
+                                                 allow_redirects=True)
+                        else:
+                            pass
                         break
+
                     except Exception as e:
                         log.debug(traceback.format_exc())
                         log.error(e)
-                        log.error("Seems POD is not started yet. Sleeping and retrying.")
-                        time.sleep(5)
-
-                if service != "K8s" and service != "NEXP":
-                    r = ''
-                    agent_base = consul_uri
-                    app = event['object']['metadata']['name']
-                    weight = get_weight_label(event)
-                    while True:
-                        try:
-                            service_dict = json.loads(service)
-                            if consul_token:
-                                for hosts in service_dict:
-                                    r = requests.put(
-                                        '{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url?token='
-                                        '{token}'.format(base=agent_base, token=consul_token,
-                                                         traefik=traefik_path, app_name=app, host=hosts),
-                                        json=service_dict[hosts], auth=consul_auth, verify=verify_ssl,
-                                        allow_redirects=True)
-                                    r = requests.put(
-                                        '{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/weight?token='
-                                        '{token}'.format(base=agent_base, token=consul_token,
-                                                         traefik=traefik_path, app_name=app, host=hosts),
-                                        json=weight, auth=consul_auth, verify=verify_ssl,
-                                        allow_redirects=True)
-                            else:
-                                for hosts in service_dict:
-                                    print hosts
-                                    r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url'
-                                                     .format(base=agent_base, traefik=traefik_path,
-                                                             app_name=app, host=hosts),
-                                                     json=service_dict[hosts], auth=consul_auth,
-                                                     verify=verify_ssl, allow_redirects=True)
-                                    r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/weight'
-                                                     .format(base=agent_base, traefik=traefik_path,
-                                                             app_name=app, host=hosts),
-                                                     json=weight, auth=consul_auth,
-                                                     verify=verify_ssl, allow_redirects=True)
-                            break
-                        except Exception as e:
-                            log.debug(traceback.format_exc())
-                            log.error(e)
-                            log.error("Sleeping and retrying.")
-                            time.sleep(10)
+                        log.error("Sleeping and retrying.")
+                        time.sleep(10)
 
                     if r.status_code == 200:
-                        log.info("ADDED service {service} to Consul's catalog".format(service=app))
+                        log.info("ADDED service {service} to Consul's catalog".format(service=node_ip))
                     else:
                         log.error("Consul returned non-200 request status code. Could not register service "
-                                  "{service}. Continuing on to the next service...".format(service=app))
+                                  "{service}. Continuing on to the next service...".format(service=node_ip))
                     sys.stdout.flush()
-                elif service == "K8s":
-                    log.info("Skipping K8s service registration...")
-                else:
-                    log.info("Service is not exposed. Skipping registration.")
 
             elif event['type'] == 'DELETED':
                 pass
@@ -238,10 +250,12 @@ def run():
     q = Queue()
     services_watch = Process(target=services_monitor, args=(q,), name='kube2pyconsul/services')
     pods_watch = Process(target=pods_monitor, args=(q,), name='kube2pyconsul/pods')
+    nodes_watch = Process(target=nodes_monitor, args=(q,), name='kube2pyconsul/nodes')
     consul_desk = Process(target=registration, args=(q,), name='kube2pyconsul/registration')
     
     services_watch.start()
     pods_watch.start()
+    nodes_watch.start()
     consul_desk.start()
     
     try:
@@ -250,6 +264,7 @@ def run():
     except KeyboardInterrupt:
         services_watch.terminate()
         pods_watch.terminate()
+        nodes_watch.terminate()
         consul_desk.terminate()
         
         exit()
