@@ -197,7 +197,8 @@ def registration(queue):
                                                  allow_redirects=True)
                             else:
                                 r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url'
-                                                 .format(base=agent_base, traefik=traefik_path, app_name=service, host=node_ip),
+                                                 .format(base=agent_base, traefik=traefik_path, app_name=service,
+                                                         host=node_ip),
                                                  json=url, auth=consul_auth, verify=verify_ssl,
                                                  allow_redirects=True)
                         break
