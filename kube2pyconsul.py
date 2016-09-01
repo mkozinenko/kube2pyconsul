@@ -185,7 +185,6 @@ def registration(queue):
                     try:
                         node_ip = get_node_ip(event)
                         services = json.loads(get_service_list())
-                        service_dict = json.loads(get_service(event))
                         agent_base = consul_uri
                         if consul_token:
                             for service in services:
