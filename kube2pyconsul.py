@@ -186,17 +186,20 @@ def registration(queue):
                         node_ip = get_node_ip(event)
                         services = json.loads(get_service_list())
                         agent_base = consul_uri
-                        if consul_token:
-                            for service in services:
-                                port = get_node_port(service)
-                                url = 'http://' + node_ip + ':' + port
+                        for service in services:
+                            port = get_node_port(service)
+                            url = 'http://' + node_ip + ':' + port
+                            if consul_token:
                                 r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url?token='
                                                  '{token}'.format(base=agent_base, token=consul_token,
                                                                   traefik=traefik_path, app_name=service, host=node_ip),
                                                  json=url, auth=consul_auth, verify=verify_ssl,
                                                  allow_redirects=True)
-                        else:
-                            pass
+                            else:
+                                r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url'
+                                                 .format(base=agent_base, traefik=traefik_path, app_name=service, host=node_ip),
+                                                 json=url, auth=consul_auth, verify=verify_ssl,
+                                                 allow_redirects=True)
                         break
 
                     except Exception as e:
