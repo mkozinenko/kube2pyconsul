@@ -88,7 +88,11 @@ def get_node_port(appname):
     r = requests.get('{base}/api/v1/services?fieldSelector="metadata.name"={value}'.format(base=kubeapi_uri,
                                                                                            value=appname))
     service_dict = json.loads(r.content)
-    node_port = service_dict['spec']['ports'][0]['nodePort']
+    try:
+        node_port = service_dict['spec']['ports'][0]['nodePort']
+    except Exception as e:
+        log.debug(e)
+        node_port = 0
     return node_port
 
 
@@ -184,19 +188,20 @@ def register_node(event):
             agent_base = consul_uri
             for service in services:
                 port = get_node_port(service)
-                url = 'http://' + node_ip + ':' + port
-                if consul_token:
-                    r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url?token='
-                                     '{token}'.format(base=agent_base, token=consul_token,
-                                                      traefik=traefik_path, app_name=service, host=node_ip),
-                                     json=url, auth=consul_auth, verify=verify_ssl,
-                                     allow_redirects=True)
-                else:
-                    r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url'
-                                     .format(base=agent_base, traefik=traefik_path, app_name=service,
-                                             host=node_ip),
-                                     json=url, auth=consul_auth, verify=verify_ssl,
-                                     allow_redirects=True)
+                if port <> 0:
+                    url = 'http://' + node_ip + ':' + port
+                    if consul_token:
+                        r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url?token='
+                                         '{token}'.format(base=agent_base, token=consul_token,
+                                                          traefik=traefik_path, app_name=service, host=node_ip),
+                                         json=url, auth=consul_auth, verify=verify_ssl,
+                                         allow_redirects=True)
+                    else:
+                        r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url'
+                                         .format(base=agent_base, traefik=traefik_path, app_name=service,
+                                                 host=node_ip),
+                                         json=url, auth=consul_auth, verify=verify_ssl,
+                                         allow_redirects=True)
             break
 
         except Exception as e:
