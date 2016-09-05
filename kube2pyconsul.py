@@ -188,7 +188,7 @@ def register_node(event):
             agent_base = consul_uri
             for service in services:
                 port = get_node_port(service)
-                if port <> 0:
+                if port != 0:
                     url = 'http://' + node_ip + ':' + port
                     if consul_token:
                         r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url?token='
