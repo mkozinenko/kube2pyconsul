@@ -203,11 +203,14 @@ def register_node(event):
                                                  host=node_ip),
                                          json=url, auth=consul_auth, verify=verify_ssl,
                                          allow_redirects=True)
+                    print "Service " + service + "registered."
+                else:
+                    print "Skipping " + service + "registration. nodePort not found."
             break
 
         except Exception as e:
             log.debug(traceback.format_exc())
-            log.error(e)
+            log.error(e.message)
             log.error("Sleeping and retrying.")
             time.sleep(10)
 
