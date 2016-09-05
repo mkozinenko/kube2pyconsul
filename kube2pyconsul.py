@@ -91,9 +91,9 @@ def get_node_port(appname):
     try:
         node_port = service_dict['spec']['ports'][0]['nodePort']
     except Exception as e:
-        log.debug(e)
+        log.debug(e.message)
+        print "nodePort not found for ", service_dict['metadata']['name']
         node_port = 0
-        print "nodePort not found."
     return node_port
 
 
