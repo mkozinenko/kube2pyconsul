@@ -265,9 +265,9 @@ def registration(queue):
                 deregister_node(event)
 
             elif event['type'] == 'MODIFIED':
-                if event['object']['status']['conditions'][3]['status'] == 'True':
+                if event['object']['status']['conditions'][2]['status'] == 'True':
                     register_node(event)
-                elif event['object']['status']['confitions'][3]['status'] == 'False':
+                elif event['object']['status']['confitions'][2]['status'] == 'False':
                     deregister_node(event)
                       
         elif context == 'pod':
