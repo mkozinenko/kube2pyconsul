@@ -175,77 +175,95 @@ def get_service_list():
             time.sleep(10)
 
 
+def register_node(event):
+    r = ''
+    while True:
+        try:
+            node_ip = get_node_ip(event)
+            services = json.loads(get_service_list())
+            agent_base = consul_uri
+            for service in services:
+                port = get_node_port(service)
+                url = 'http://' + node_ip + ':' + port
+                if consul_token:
+                    r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url?token='
+                                     '{token}'.format(base=agent_base, token=consul_token,
+                                                      traefik=traefik_path, app_name=service, host=node_ip),
+                                     json=url, auth=consul_auth, verify=verify_ssl,
+                                     allow_redirects=True)
+                else:
+                    r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url'
+                                     .format(base=agent_base, traefik=traefik_path, app_name=service,
+                                             host=node_ip),
+                                     json=url, auth=consul_auth, verify=verify_ssl,
+                                     allow_redirects=True)
+            break
+
+        except Exception as e:
+            log.debug(traceback.format_exc())
+            log.error(e)
+            log.error("Sleeping and retrying.")
+            time.sleep(10)
+
+        if r.status_code == 200:
+            log.info("ADDED service {service} to Consul's catalog".format(service=node_ip))
+        else:
+            log.error("Consul returned non-200 request status code. Could not register service "
+                      "{service}. Continuing on to the next service...".format(service=node_ip))
+        sys.stdout.flush()
+
+
+def deregister_node(event):
+    r = ''
+    while True:
+        try:
+            node_ip = get_node_ip(event)
+            services = json.loads(get_service_list())
+            agent_base = consul_uri
+            for service in services:
+                if consul_token:
+                    r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url?token='
+                                        '{token}'.format(base=agent_base, token=consul_token,
+                                                         traefik=traefik_path, app_name=service, host=node_ip),
+                                        auth=consul_auth, verify=verify_ssl,
+                                        allow_redirects=True)
+                else:
+                    r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url'
+                                        .format(base=agent_base, traefik=traefik_path, app_name=service,
+                                                host=node_ip),
+                                        auth=consul_auth, verify=verify_ssl,
+                                        allow_redirects=True)
+            break
+
+        except Exception as e:
+            log.debug(traceback.format_exc())
+            log.error(e)
+            log.error("Sleeping and retrying.")
+            time.sleep(10)
+
+        if r.status_code == 200:
+            log.info("ADDED service {service} to Consul's catalog".format(service=node_ip))
+        else:
+            log.error("Consul returned non-200 request status code. Could not register service "
+                      "{service}. Continuing on to the next service...".format(service=node_ip))
+        sys.stdout.flush()
+
+
 def registration(queue):
     while True:
         context, event = queue.get(block=True)
         if context == 'node':
             if event['type'] == 'ADDED':
-                r = ''
-                while True:
-                    try:
-                        node_ip = get_node_ip(event)
-                        services = json.loads(get_service_list())
-                        agent_base = consul_uri
-                        for service in services:
-                            port = get_node_port(service)
-                            url = 'http://' + node_ip + ':' + port
-                            if consul_token:
-                                r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url?token='
-                                                 '{token}'.format(base=agent_base, token=consul_token,
-                                                                  traefik=traefik_path, app_name=service, host=node_ip),
-                                                 json=url, auth=consul_auth, verify=verify_ssl,
-                                                 allow_redirects=True)
-                            else:
-                                r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url'
-                                                 .format(base=agent_base, traefik=traefik_path, app_name=service,
-                                                         host=node_ip),
-                                                 json=url, auth=consul_auth, verify=verify_ssl,
-                                                 allow_redirects=True)
-                        break
-
-                    except Exception as e:
-                        log.debug(traceback.format_exc())
-                        log.error(e)
-                        log.error("Sleeping and retrying.")
-                        time.sleep(10)
-
-                    if r.status_code == 200:
-                        log.info("ADDED service {service} to Consul's catalog".format(service=node_ip))
-                    else:
-                        log.error("Consul returned non-200 request status code. Could not register service "
-                                  "{service}. Continuing on to the next service...".format(service=node_ip))
-                    sys.stdout.flush()
+                register_node(event)
 
             elif event['type'] == 'DELETED':
-                pass
-#                service = get_service(event)
-#                r = ''
-#                agent_base = consul_uri
-#                while True:
-#                    try:
-#                        if consul_token:
-#                            r = requests.post('{base}/v1/agent/service/deregister/{id}?token={token}'
-#                                              .format(base=agent_base, id=service['ID'],
-#                                                      port=str(service['Port']), token=consul_token),
-#                                              auth=consul_auth, verify=verify_ssl)
-#                        else:
-#                            r = requests.post('{base}/v1/agent/service/deregister/{id}'
-#                                              .format(base=agent_base, id=service['ID'],
-#                                                      port=str(service['Port'])),
-#                                              auth=consul_auth, verify=verify_ssl)
-#                        break
-#                    except Exception as e:
-#                        log.debug(traceback.format_exc())
-#                        log.error(e)
-#                        log.error("Sleeping and retrying.")
-#                        time.sleep(10)
-#
-#                if r.status_code == 200:
-#                    log.info("DELETED service {service} from Consul's catalog".format(service=service))
-#                else:
-#                    log.error("Consul returned non-200 request status code. Could not deregister service {service}. "
-#                              "Continuing on to the next service...".format(service=service))
-#                sys.stdout.flush()
+                deregister_node(event)
+
+            elif event['type'] == 'MODIFIED':
+                if event['object']['conditions'][3]['status'] == 'True':
+                    register_node(event)
+                elif event['object']['confitions'][3]['status'] == 'False':
+                    deregister_node(event)
                       
         elif context == 'pod':
             pass
