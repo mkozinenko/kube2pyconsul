@@ -197,7 +197,8 @@ def register_node(event):
                     if consul_token:
                         r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url?token='
                                          '{token}'.format(base=agent_base, token=consul_token,
-                                                          traefik=traefik_path, app_name=services[service], host=node_ip),
+                                                          traefik=traefik_path, app_name=services[service],
+                                                          host=node_ip),
                                          json=url, auth=consul_auth, verify=verify_ssl,
                                          allow_redirects=True)
                     else:
@@ -206,9 +207,9 @@ def register_node(event):
                                                  host=node_ip),
                                          json=url, auth=consul_auth, verify=verify_ssl,
                                          allow_redirects=True)
-                    print "Service " + services[service] + "registered."
+                    print "Service " + services[service] + " on node " + node_ip + "registered."
                 else:
-                    print "Skipping " + services[service] + "registration. nodePort not found."
+                    print "Skipping " + services[service] + " registration on node " + node_ip + ". nodePort not found."
             break
 
         except Exception as e:
@@ -237,7 +238,8 @@ def deregister_node(event):
                 if consul_token:
                     r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url?token='
                                         '{token}'.format(base=agent_base, token=consul_token,
-                                                         traefik=traefik_path, app_name=services[service], host=node_ip),
+                                                         traefik=traefik_path, app_name=services[service],
+                                                         host=node_ip),
                                         auth=consul_auth, verify=verify_ssl,
                                         allow_redirects=True)
                     r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/weight?token='
@@ -307,13 +309,13 @@ def registration(queue):
         
 def run():
     q = Queue()
-#    services_watch = Process(target=services_monitor, args=(q,), name='kube2pyconsul/services')
-#    pods_watch = Process(target=pods_monitor, args=(q,), name='kube2pyconsul/pods')
+    # services_watch = Process(target=services_monitor, args=(q,), name='kube2pyconsul/services')
+    # pods_watch = Process(target=pods_monitor, args=(q,), name='kube2pyconsul/pods')
     nodes_watch = Process(target=nodes_monitor, args=(q,), name='kube2pyconsul/nodes')
     consul_desk = Process(target=registration, args=(q,), name='kube2pyconsul/registration')
     
-#    services_watch.start()
-#    pods_watch.start()
+    # services_watch.start()
+    # pods_watch.start()
     nodes_watch.start()
     consul_desk.start()
     
@@ -321,8 +323,8 @@ def run():
         while True:
             time.sleep(10)
     except KeyboardInterrupt:
-#        services_watch.terminate()
-#        pods_watch.terminate()
+        # services_watch.terminate()
+        # pods_watch.terminate()
         nodes_watch.terminate()
         consul_desk.terminate()
         
