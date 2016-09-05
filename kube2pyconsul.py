@@ -89,10 +89,10 @@ def get_node_port(appname):
                                                                                            value=appname))
     service_dict = json.loads(r.content)
     try:
-        node_port = service_dict['spec']['ports'][0]['nodePort']
+        node_port = service_dict['items'][0]['spec']['ports'][0]['nodePort']
     except Exception as e:
         log.debug(e.message)
-        print "nodePort not found for ", service_dict['metadata']['name']
+        print "nodePort not found for ", service_dict['items'][0]['metadata']['name']
         node_port = 0
     return node_port
 
