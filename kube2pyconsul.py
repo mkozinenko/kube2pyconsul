@@ -268,7 +268,7 @@ def deregister_node(event):
                                                 host=node_ip),
                                         auth=consul_auth, verify=verify_ssl,
                                         allow_redirects=True)
-                print "Node {node} deregistered".format(node=node_ip)
+                print "Node {node} deregistered for service {service}".format(node=node_ip, service=services[service])
             break
 
         except Exception as e:
