@@ -234,13 +234,13 @@ def deregister_node(event):
             agent_base = consul_uri
             for service in services:
                 if consul_token:
-                    r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url?token='
+                    r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}token='
                                         '{token}'.format(base=agent_base, token=consul_token,
                                                          traefik=traefik_path, app_name=services[service], host=node_ip),
                                         auth=consul_auth, verify=verify_ssl,
                                         allow_redirects=True)
                 else:
-                    r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url'
+                    r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}'
                                         .format(base=agent_base, traefik=traefik_path, app_name=services[service],
                                                 host=node_ip),
                                         auth=consul_auth, verify=verify_ssl,
