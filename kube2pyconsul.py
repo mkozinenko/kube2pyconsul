@@ -93,6 +93,7 @@ def get_node_port(appname):
     except Exception as e:
         log.debug(e)
         node_port = 0
+        print "nodePort not found."
     return node_port
 
 
@@ -267,7 +268,7 @@ def registration(queue):
             elif event['type'] == 'MODIFIED':
                 if event['object']['status']['conditions'][2]['status'] == 'True':
                     register_node(event)
-                elif event['object']['status']['confitions'][2]['status'] == 'False':
+                elif event['object']['status']['conditions'][2]['status'] == 'False':
                     deregister_node(event)
                       
         elif context == 'pod':
