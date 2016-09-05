@@ -89,7 +89,6 @@ def get_node_port(appname):
                                                                                          value=appname))
     service_dict = json.loads(r.content)
     if len(service_dict['items']) > 0:
-        print service_dict
         try:
             node_port = service_dict['items'][0]['spec']['ports'][0]['nodePort']
         except Exception as e:
@@ -190,28 +189,26 @@ def register_node(event):
         try:
             node_ip = get_node_ip(event)
             services = json.loads(get_service_list())
-            print services
             agent_base = consul_uri
             for service in services:
-                print service
-                port = get_node_port(service)
+                port = get_node_port(services[service])
                 if port != 0:
                     url = 'http://' + node_ip + ':' + port
                     if consul_token:
                         r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url?token='
                                          '{token}'.format(base=agent_base, token=consul_token,
-                                                          traefik=traefik_path, app_name=service, host=node_ip),
+                                                          traefik=traefik_path, app_name=services[service], host=node_ip),
                                          json=url, auth=consul_auth, verify=verify_ssl,
                                          allow_redirects=True)
                     else:
                         r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url'
-                                         .format(base=agent_base, traefik=traefik_path, app_name=service,
+                                         .format(base=agent_base, traefik=traefik_path, app_name=services[service],
                                                  host=node_ip),
                                          json=url, auth=consul_auth, verify=verify_ssl,
                                          allow_redirects=True)
-                    print "Service " + service + "registered."
+                    print "Service " + services[service] + "registered."
                 else:
-                    print "Skipping " + service + "registration. nodePort not found."
+                    print "Skipping " + services[service] + "registration. nodePort not found."
             break
 
         except Exception as e:
@@ -239,12 +236,12 @@ def deregister_node(event):
                 if consul_token:
                     r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url?token='
                                         '{token}'.format(base=agent_base, token=consul_token,
-                                                         traefik=traefik_path, app_name=service, host=node_ip),
+                                                         traefik=traefik_path, app_name=services[service], host=node_ip),
                                         auth=consul_auth, verify=verify_ssl,
                                         allow_redirects=True)
                 else:
                     r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url'
-                                        .format(base=agent_base, traefik=traefik_path, app_name=service,
+                                        .format(base=agent_base, traefik=traefik_path, app_name=services[service],
                                                 host=node_ip),
                                         auth=consul_auth, verify=verify_ssl,
                                         allow_redirects=True)
