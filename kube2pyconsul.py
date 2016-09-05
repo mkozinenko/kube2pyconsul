@@ -305,13 +305,13 @@ def registration(queue):
         
 def run():
     q = Queue()
-    services_watch = Process(target=services_monitor, args=(q,), name='kube2pyconsul/services')
-    pods_watch = Process(target=pods_monitor, args=(q,), name='kube2pyconsul/pods')
+#    services_watch = Process(target=services_monitor, args=(q,), name='kube2pyconsul/services')
+#    pods_watch = Process(target=pods_monitor, args=(q,), name='kube2pyconsul/pods')
     nodes_watch = Process(target=nodes_monitor, args=(q,), name='kube2pyconsul/nodes')
     consul_desk = Process(target=registration, args=(q,), name='kube2pyconsul/registration')
     
-    services_watch.start()
-    pods_watch.start()
+#    services_watch.start()
+#    pods_watch.start()
     nodes_watch.start()
     consul_desk.start()
     
@@ -319,8 +319,8 @@ def run():
         while True:
             time.sleep(10)
     except KeyboardInterrupt:
-        services_watch.terminate()
-        pods_watch.terminate()
+#        services_watch.terminate()
+#        pods_watch.terminate()
         nodes_watch.terminate()
         consul_desk.terminate()
         
