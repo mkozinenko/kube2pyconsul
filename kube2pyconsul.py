@@ -227,6 +227,7 @@ def register_node(event):
 
 def deregister_node(event):
     r = ''
+    print "Deregistering node..."
     while True:
         try:
             node_ip = get_node_ip(event)
@@ -267,6 +268,7 @@ def deregister_node(event):
                                                 host=node_ip),
                                         auth=consul_auth, verify=verify_ssl,
                                         allow_redirects=True)
+                print "Node {node} deregistered".format(node=node_ip)
             break
 
         except Exception as e:
