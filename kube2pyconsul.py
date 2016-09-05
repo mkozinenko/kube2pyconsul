@@ -234,12 +234,34 @@ def deregister_node(event):
             agent_base = consul_uri
             for service in services:
                 if consul_token:
-                    r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}token='
+                    r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url?token='
                                         '{token}'.format(base=agent_base, token=consul_token,
                                                          traefik=traefik_path, app_name=services[service], host=node_ip),
                                         auth=consul_auth, verify=verify_ssl,
                                         allow_redirects=True)
+                    r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/weight?token='
+                                        '{token}'.format(base=agent_base, token=consul_token,
+                                                         traefik=traefik_path, app_name=services[service],
+                                                         host=node_ip),
+                                        auth=consul_auth, verify=verify_ssl,
+                                        allow_redirects=True)
+                    r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}?token='
+                                        '{token}'.format(base=agent_base, token=consul_token,
+                                                         traefik=traefik_path, app_name=services[service],
+                                                         host=node_ip),
+                                        auth=consul_auth, verify=verify_ssl,
+                                        allow_redirects=True)
                 else:
+                    r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url'
+                                        .format(base=agent_base, traefik=traefik_path, app_name=services[service],
+                                                host=node_ip),
+                                        auth=consul_auth, verify=verify_ssl,
+                                        allow_redirects=True)
+                    r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/weight'
+                                        .format(base=agent_base, traefik=traefik_path, app_name=services[service],
+                                                host=node_ip),
+                                        auth=consul_auth, verify=verify_ssl,
+                                        allow_redirects=True)
                     r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}'
                                         .format(base=agent_base, traefik=traefik_path, app_name=services[service],
                                                 host=node_ip),
@@ -249,15 +271,15 @@ def deregister_node(event):
 
         except Exception as e:
             log.debug(traceback.format_exc())
-            log.error(e)
+            log.error(e.message)
             log.error("Sleeping and retrying.")
             time.sleep(10)
 
         if r.status_code == 200:
-            log.info("ADDED service {service} to Consul's catalog".format(service=node_ip))
+            log.info("DEREGISTERED node {service} to Consul's catalog".format(service=node_ip))
         else:
-            log.error("Consul returned non-200 request status code. Could not register service "
-                      "{service}. Continuing on to the next service...".format(service=node_ip))
+            log.error("Consul returned non-200 request status code. Could not deregister node "
+                      "{service}. Continuing on to the next node...".format(service=node_ip))
         sys.stdout.flush()
 
 
