@@ -88,12 +88,15 @@ def get_node_port(appname):
     r = requests.get('{base}/api/v1/services?fieldSelector=metadata.name={value}'.format(base=kubeapi_uri,
                                                                                          value=appname))
     service_dict = json.loads(r.content)
-    print service_dict
-    try:
-        node_port = service_dict['items'][0]['spec']['ports'][0]['nodePort']
-    except Exception as e:
-        log.debug(e.message)
-        print "nodePort not found for ", service_dict['items'][0]['metadata']['name']
+    if len(service_dict['items']) > 0:
+        print service_dict
+        try:
+            node_port = service_dict['items'][0]['spec']['ports'][0]['nodePort']
+        except Exception as e:
+            log.debug(e.message)
+            print "nodePort not found for ", service_dict['items'][0]['metadata']['name']
+            node_port = 0
+    else:
         node_port = 0
     return node_port
 
