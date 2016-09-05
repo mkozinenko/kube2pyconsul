@@ -187,8 +187,10 @@ def register_node(event):
         try:
             node_ip = get_node_ip(event)
             services = json.loads(get_service_list())
+            print services
             agent_base = consul_uri
             for service in services:
+                print service
                 port = get_node_port(service)
                 if port != 0:
                     url = 'http://' + node_ip + ':' + port
