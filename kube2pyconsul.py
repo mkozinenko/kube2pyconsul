@@ -85,9 +85,10 @@ def get_service(event):
 
 
 def get_node_port(appname):
-    r = requests.get('{base}/api/v1/services?fieldSelector="metadata.name"={value}'.format(base=kubeapi_uri,
-                                                                                           value=appname))
+    r = requests.get('{base}/api/v1/services?fieldSelector="metadata.name"="{value}"'.format(base=kubeapi_uri,
+                                                                                             value=appname))
     service_dict = json.loads(r.content)
+    print service_dict
     try:
         node_port = service_dict['items'][0]['spec']['ports'][0]['nodePort']
     except Exception as e:
