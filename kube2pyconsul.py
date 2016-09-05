@@ -302,6 +302,8 @@ def registration(queue):
                     register_node(event)
                 elif event['object']['status']['conditions'][2]['status'] == 'False':
                     deregister_node(event)
+                elif event['object']['status']['conditions'][2]['status'] == 'Unknown':
+                    deregister_node(event)
                       
         elif context == 'pod':
             pass
