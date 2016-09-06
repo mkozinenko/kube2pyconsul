@@ -103,9 +103,10 @@ def get_weight_label(appname):
     r = requests.get('{base}/api/v1/services?fieldSelector=metadata.name={value}'.format(base=kubeapi_uri,
                                                                                          value=appname))
     service_dict = json.loads(r.content)
-    if len(service_dict['items']) >0:
+    if len(service_dict['items']) > 0:
         try:
             weight = int(service_dict['items'][0]['metadata']['labels']['weight'])
+            log.debug("Weight label found. Value: {value}".format(value=weight))
         except Exception as e:
             log.debug(e.message)
             weight = 100
