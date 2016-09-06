@@ -93,26 +93,25 @@ def get_node_port(appname):
             node_port = service_dict['items'][0]['spec']['ports'][0]['nodePort']
         except Exception as e:
             log.debug(e.message)
-            print "nodePort not found for ", service_dict['items'][0]['metadata']['name']
             node_port = 0
     else:
         node_port = 0
     return node_port
 
 
-def get_weight_label(event):
-    if event['object']['metadata']['name'] == "kubernetes":
-        return "K8s"
-    elif 'nodePort' in event['object']['spec']['ports'][0]:
-        key, value = event['object']['spec']['selector'].items()[0]
-        r = requests.get('{base}/api/v1/pods?labelSelector={key}={value}'.format(base=kubeapi_uri,
-                                                                                 key=key, value=value),
-                         auth=kube_auth, verify=verify_ssl)
-        pod_dict = json.loads(r.content)
-        resp = int(pod_dict['items'][0]['metadata']['labels']['weight'])
-        return resp
+def get_weight_label(appname):
+    r = requests.get('{base}/api/v1/services?fieldSelector=metadata.name={value}'.format(base=kubeapi_uri,
+                                                                                         value=appname))
+    service_dict = json.loads(r.content)
+    if len(service_dict['items']) >0:
+        try:
+            weight = int(service_dict['items'][0]['metadata']['labels']['weight'])
+        except Exception as e:
+            log.debug(e.message)
+            weight = 100
     else:
-        return "NEXP"
+        weight = 100
+    return weight
 
 
 def services_monitor(queue):
@@ -192,6 +191,7 @@ def register_node(event):
             agent_base = consul_uri
             for service in services:
                 port = get_node_port(services[service])
+                weight = get_weight_label(services[service])
                 if port != 0:
                     url = 'http://' + node_ip + ':' + str(port)
                     if consul_token:
@@ -201,11 +201,22 @@ def register_node(event):
                                                           host=node_ip),
                                          json=url, auth=consul_auth, verify=verify_ssl,
                                          allow_redirects=True)
+                        r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/weight?token='
+                                         '{token}'.format(base=agent_base, token=consul_token,
+                                                          traefik=traefik_path, app_name=services[service],
+                                                          host=node_ip),
+                                         json=weight, auth=consul_auth, verify=verify_ssl,
+                                         allow_redirects=True)
                     else:
                         r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url'
                                          .format(base=agent_base, traefik=traefik_path, app_name=services[service],
                                                  host=node_ip),
                                          json=url, auth=consul_auth, verify=verify_ssl,
+                                         allow_redirects=True)
+                        r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/weight'
+                                         .format(base=agent_base, traefik=traefik_path, app_name=services[service],
+                                                 host=node_ip),
+                                         json=weight, auth=consul_auth, verify=verify_ssl,
                                          allow_redirects=True)
                     print "Service " + services[service] + " on node " + node_ip + "registered."
                 else:
