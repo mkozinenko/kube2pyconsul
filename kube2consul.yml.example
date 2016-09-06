@@ -31,5 +31,7 @@ spec:
         - --kube-master=https://127.0.0.1:443
         - --kube-auth=user,pass
         - --consul-token=some-token
+        securityContext:
+          privileged: true
       dnsPolicy: Default
       hostNetwork: true
