@@ -190,15 +190,16 @@ def get_service_list():
         try:
             req = requests.get('{base}/api/v1/services'
                                .format(base=KUBEAPI_URI), verify=VERIFY_SSL, auth=KUBE_AUTH)
-            services = json.loads(req.content)
+            svcs = json.loads(req.content)
             list_def = {}
             service = ''
-            for index, service in enumerate(services['items']):
-                list_def[index] = services['items'][index]['metadata']['labels']['service'] \
-                                  + '-' \
-                                  + services['items'][index]['metadata']['labels']['environment'] \
-                                  + ':' \
-                                  + services['items'][index]['metadata']['labels']['version']
+            for index, service in enumerate(svcs['items']):
+                if svcs['items'][index]['metadata']['labels']['router'] == 'traefik':
+                    list_def[index] = svcs['items'][index]['metadata']['labels']['service'] \
+                                      + '-' \
+                                      + svcs['items'][index]['metadata']['labels']['environment'] \
+                                      + ':' \
+                                      + svcs['items'][index]['metadata']['labels']['version']
             LOG.debug(service)
             return json.dumps(list_def)
         except Exception as err:
