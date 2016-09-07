@@ -194,14 +194,14 @@ def get_service_list():
             svs = json.loads(req.content)
             list_def = {}
             service = ''
-            for ix, service in enumerate(svs['items']):
-                if 'router' in svs['items'][ix]['metadata']['labels']:
-                    if svs['items'][ix]['metadata']['labels']['router'] == 'traefik':
-                        list_def[ix] = svs['items'][ix]['metadata']['labels']['service'] \
-                                          + '-' \
-                                          + svs['items'][ix]['metadata']['labels']['environment'] \
-                                          + ':' \
-                                          + svs['items'][ix]['metadata']['labels']['version']
+            for idx, service in enumerate(svs['items']):
+                if 'router' in svs['items'][idx]['metadata']['labels']:
+                    if svs['items'][idx]['metadata']['labels']['router'] == 'traefik':
+                        list_def[idx] = svs['items'][idx]['metadata']['labels']['service'] \
+                                        + '-' \
+                                        + svs['items'][idx]['metadata']['labels']['environment'] \
+                                        + ':' \
+                                        + svs['items'][idx]['metadata']['labels']['version']
             LOG.debug(service)
             return json.dumps(list_def)
         except Exception as err:
