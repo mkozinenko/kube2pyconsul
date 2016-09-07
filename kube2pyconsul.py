@@ -53,6 +53,7 @@ LOG.info("Starting with: consul={0}, kubeapi={1}".format(CONSUL_URI, KUBEAPI_URI
 
 
 def get_kube_hosts():
+    """Queries KubeAPI and returns workers as a list"""
     request_url = KUBEAPI_URI + '/api/v1/nodes'
     while True:
         try:
@@ -70,6 +71,9 @@ def get_kube_hosts():
 
 
 def get_service(event):
+    """Obsolete, but left for possible future functionality modifications
+    takes event of 'service' context and returns json with urls
+    """
     if event['object']['metadata']['name'] == "kubernetes":
         return "K8s"
     elif 'nodePort' in event['object']['spec']['ports'][0]:
@@ -86,6 +90,7 @@ def get_service(event):
 
 
 def get_node_port(appname):
+    """Gets nodePort for application appname. Returns int"""
     req = requests.get('{base}/api/v1/services?fieldSelector=metadata.name={value}'
                        .format(base=KUBEAPI_URI, value=appname))
     service_dict = json.loads(req.content)
@@ -101,6 +106,7 @@ def get_node_port(appname):
 
 
 def get_weight_label(appname):
+    """Gets weight label from service. Returns int value or 1 if label was not found"""
     req = requests.get('{base}/api/v1/services?fieldSelector=metadata.name={value}'
                        .format(base=KUBEAPI_URI, value=appname))
     service_dict = json.loads(req.content)
@@ -117,6 +123,9 @@ def get_weight_label(appname):
 
 
 def services_monitor(queue):
+    """Obsolete, but left for possible future functionality modifications
+    monitors service events as a subscriber and puts them into queue
+    """
     while True:
         try:
             req = requests.get('{base}/api/v1/services?watch=true'.format(base=KUBEAPI_URI),
@@ -133,6 +142,9 @@ def services_monitor(queue):
 
 
 def pods_monitor(queue):
+    """Obsolete, but left for possible future functionality modifications
+    monitors pod events as a subscriber and puts them into queue
+    """
     while True:
         try:
             req = requests.get('{base}/api/v1/pods?watch=true'.format(base=KUBEAPI_URI),
@@ -149,6 +161,7 @@ def pods_monitor(queue):
 
 
 def nodes_monitor(queue):
+    """monitors node events and puts them into queue"""
     while True:
         try:
             req = requests.get('{base}/api/v1/nodes?watch=true'.format(base=KUBEAPI_URI),
@@ -165,10 +178,14 @@ def nodes_monitor(queue):
 
 
 def get_node_ip(event):
+    """Gets node IP from node context event. Returns string"""
     return event['object']['status']['addresses'][0]['address']
 
 
 def get_service_list():
+    """Gets list of all services from KubeAPI. Returns json with strings like:
+    service-development:0.22.2
+    """
     while True:
         try:
             req = requests.get('{base}/api/v1/services'
@@ -192,10 +209,12 @@ def get_service_list():
 
 
 def url_beautify(url_string):
+    """Removes additional quotes from URL string to put it to KV for traefik"""
     return url_string.replace('"', '')
 
 
 def register_node(event):
+    """Registers node for traefik for all services to make it act as backend"""
     req = ''
     while True:
         try:
@@ -262,6 +281,7 @@ def register_node(event):
 
 
 def deregister_node(event):
+    """Removes node from KV to exclude it from traefik backends"""
     req = ''
     print "Deregistering node..."
     while True:
@@ -336,6 +356,7 @@ def deregister_node(event):
 
 
 def registration(queue):
+    """Monitors node events and triggers register/remove methods"""
     while True:
         context, event = queue.get(block=True)
         if context == 'node':
@@ -352,11 +373,14 @@ def registration(queue):
                     deregister_node(event)
                 elif event['object']['status']['conditions'][2]['status'] == 'Unknown':
                     deregister_node(event)
+        elif context == 'service':
+            pass
         elif context == 'pod':
             pass
 
 
 def run():
+    """Main. Triggers all configured threads."""
     eventq = Queue()
     # services_watch = Process(target=services_monitor, args=(q,), name='kube2pyconsul/services')
     # pods_watch = Process(target=pods_monitor, args=(q,), name='kube2pyconsul/pods')
