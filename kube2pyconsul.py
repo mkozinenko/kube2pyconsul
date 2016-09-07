@@ -215,7 +215,8 @@ def url_beautify(url_string):
 
 def register_node(event):
     """Registers node for traefik for all services to make it act as backend"""
-    req = ''
+    req = None
+    req.response = 0
     while True:
         try:
             node_ip = get_node_ip(event)
@@ -282,7 +283,8 @@ def register_node(event):
 
 def deregister_node(event):
     """Removes node from KV to exclude it from traefik backends"""
-    req = ''
+    req = None
+    req.response = 0
     print "Deregistering node..."
     while True:
         try:
