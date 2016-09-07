@@ -184,22 +184,24 @@ def get_node_ip(event):
 
 def get_service_list():
     """Gets list of all services from KubeAPI. Returns json with strings like:
-    service-development:0.22.2
+    service-development:0.22.2. Filters out only services containing
+    router:traefik labels.
     """
     while True:
         try:
             req = requests.get('{base}/api/v1/services'
                                .format(base=KUBEAPI_URI), verify=VERIFY_SSL, auth=KUBE_AUTH)
-            svcs = json.loads(req.content)
+            svs = json.loads(req.content)
             list_def = {}
             service = ''
-            for index, service in enumerate(svcs['items']):
-                if svcs['items'][index]['metadata']['labels']['router'] == 'traefik':
-                    list_def[index] = svcs['items'][index]['metadata']['labels']['service'] \
-                                      + '-' \
-                                      + svcs['items'][index]['metadata']['labels']['environment'] \
-                                      + ':' \
-                                      + svcs['items'][index]['metadata']['labels']['version']
+            for ix, service in enumerate(svs['items']):
+                if 'router' in svs['items'][ix]['metadata']['labels']:
+                    if svs['items'][ix]['metadata']['labels']['router'] == 'traefik':
+                        list_def[ix] = svs['items'][ix]['metadata']['labels']['service'] \
+                                          + '-' \
+                                          + svs['items'][ix]['metadata']['labels']['environment'] \
+                                          + ':' \
+                                          + svs['items'][ix]['metadata']['labels']['version']
             LOG.debug(service)
             return json.dumps(list_def)
         except Exception as err:
