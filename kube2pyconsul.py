@@ -1,8 +1,9 @@
 """kube2pyconsul.
 
 Usage:
-  kube2pyconsul.py [-v <loglevel>] [--verify-ssl] [--consul-agent=<consul-uri>] [--kube-master=<kubeapi-uri>]
-  [--consul-auth=<user,pass>] [--kube-auth=<user,pass>] [--consul-token=token] [--traefik-kv-path=path]
+  kube2pyconsul.py [-v <loglevel>] [--verify-ssl] [--consul-agent=<consul-uri>]
+  [--kube-master=<kubeapi-uri>] [--consul-auth=<user,pass>] [--kube-auth=<user,pass>]
+  [--consul-token=token] [--TRAEFIK-kv-path=path]
   kube2pyconsul.py (-h | --help)
 
 Options:
@@ -14,59 +15,57 @@ Options:
   --kube-auth=<user,pass>      Kubernetes http auth credentials [default: None]
   --verify-ssl	       	       Verify SSL or not when connecting to APIs [default: False]
   --consul-token=token         Token for ACL enabled consul
-  --traefik-kv-path=path       root key of traefik config in Consul KV
+  --TRAEFIK-kv-path=path       root key of TRAEFIK config in Consul KV
 
 """
-from docopt import docopt
-
 import sys
 import json
 import time
 import logging
-import requests
 import traceback
 import multiprocessing
-
 from multiprocessing import Queue
 from multiprocessing import Process
+from docopt import docopt
+import requests
 
 requests.packages.urllib3.disable_warnings()
 
-args = docopt(__doc__, version='kube2pyconsul 1.0')
+ARGS = docopt(__doc__, version='kube2pyconsul 1.0')
 
 logging.basicConfig()
-log = multiprocessing.log_to_stderr()
-level = logging.getLevelName(args['-v'])
-log.setLevel(level)
+LOG = multiprocessing.log_to_stderr()
+LEVEL = logging.getLevelName(ARGS['-v'])
+LOG.setLevel(LEVEL)
 
 
-consul_uri = args['--consul-agent']
-consul_auth = tuple(args['--consul-auth'].split(',')) if args['--consul-auth'] != 'None' else None
-consul_token = args['--consul-token']
-traefik_path = args['--traefik-kv-path']
+CONSUL_URI = ARGS['--consul-agent']
+CONSUL_AUTH = tuple(ARGS['--consul-auth'].split(',')) if ARGS['--consul-auth'] != 'None' else None
+CONSUL_TOKEN = ARGS['--consul-token']
+TRAEFIK = ARGS['--TRAEFIK-kv-path']
 
-kubeapi_uri = args['--kube-master']
-kube_auth = tuple(args['--kube-auth'].split(',')) if args['--kube-auth'] != 'None' else None
+KUBEAPI_URI = ARGS['--kube-master']
+KUBE_AUTH = tuple(ARGS['--kube-auth'].split(',')) if ARGS['--kube-auth'] != 'None' else None
 
-verify_ssl = args['--verify-ssl']
+VERIFY_SSL = ARGS['--verify-ssl']
 
-log.info("Starting with: consul={0}, kubeapi={1}".format(consul_uri, kubeapi_uri))
+LOG.info("Starting with: consul={0}, kubeapi={1}".format(CONSUL_URI, KUBEAPI_URI))
 
 
 def get_kube_hosts():
-    request_url = kubeapi_uri + '/api/v1/nodes'
+    request_url = KUBEAPI_URI + '/api/v1/nodes'
     while True:
         try:
             ip_list = {}
-            r = requests.get(request_url, verify=verify_ssl, auth=kube_auth)
-            nodes = json.loads(r.content)
+            req = requests.get(request_url, verify=VERIFY_SSL, auth=KUBE_AUTH)
+            nodes = json.loads(req.content)
             for index, hosts in enumerate(nodes['items']):
                 ip_list[index] = hosts['status']['addresses'][0]['address']
             return ip_list
-        except Exception as e:
-            log.debug(traceback.format_exc())
-            log.error(e)
-            log.error("Error getting nodes from KubeAPI. restarting.")
+        except Exception as err:
+            LOG.debug(traceback.format_exc())
+            LOG.error(err)
+            LOG.error("Error getting nodes from KubeAPI. restarting.")
             time.sleep(10)
 
 
@@ -76,23 +75,25 @@ def get_service(event):
     elif 'nodePort' in event['object']['spec']['ports'][0]:
         hosts = get_kube_hosts()
         resp = {}
+        host = ''
         for index, host in enumerate(hosts):
             resp[hosts[index]] = 'http://' + str(hosts[index]) + ':' + \
                                  str(event['object']['spec']['ports'][0]['nodePort'])
+        LOG.debug(host)
         return json.dumps(resp)
     else:
         return "NEXP"
 
 
 def get_node_port(appname):
-    r = requests.get('{base}/api/v1/services?fieldSelector=metadata.name={value}'.format(base=kubeapi_uri,
-                                                                                         value=appname))
-    service_dict = json.loads(r.content)
+    req = requests.get('{base}/api/v1/services?fieldSelector=metadata.name={value}'
+                       .format(base=KUBEAPI_URI, value=appname))
+    service_dict = json.loads(req.content)
     if len(service_dict['items']) > 0:
         try:
             node_port = service_dict['items'][0]['spec']['ports'][0]['nodePort']
-        except Exception as e:
-            log.debug(e.message)
+        except Exception as err:
+            LOG.debug(err.message)
             node_port = 0
     else:
         node_port = 0
@@ -100,66 +101,66 @@ def get_node_port(appname):
 
 
 def get_weight_label(appname):
-    r = requests.get('{base}/api/v1/services?fieldSelector=metadata.name={value}'.format(base=kubeapi_uri,
-                                                                                         value=appname))
-    service_dict = json.loads(r.content)
+    req = requests.get('{base}/api/v1/services?fieldSelector=metadata.name={value}'
+                       .format(base=KUBEAPI_URI, value=appname))
+    service_dict = json.loads(req.content)
     if len(service_dict['items']) > 0:
         try:
             weight = int(service_dict['items'][0]['metadata']['labels']['weight'])
-            log.debug("Weight label found. Value: {value}".format(value=weight))
-        except Exception as e:
-            log.debug(e.message)
-            weight = 100
+            LOG.debug("Weight label found. Value: {value}".format(value=weight))
+        except Exception as err:
+            LOG.debug(err.message)
+            weight = 1
     else:
-        weight = 100
+        weight = 1
     return weight
 
 
 def services_monitor(queue):
     while True:
         try:
-            r = requests.get('{base}/api/v1/services?watch=true'.format(base=kubeapi_uri), 
-                             stream=True, verify=verify_ssl, auth=kube_auth)
-            for line in r.iter_lines():
+            req = requests.get('{base}/api/v1/services?watch=true'.format(base=KUBEAPI_URI),
+                               stream=True, verify=VERIFY_SSL, auth=KUBE_AUTH)
+            for line in req.iter_lines():
                 if line:
                     event = json.loads(line)
                     queue.put(('service', event))
-        except Exception as e:
-            log.debug(traceback.format_exc())
-            log.error(e)
-            log.error("Sleeping and restarting afresh.")
+        except Exception as err:
+            LOG.debug(traceback.format_exc())
+            LOG.error(err)
+            LOG.error("Sleeping and restarting afresh.")
             time.sleep(10)
 
-    
+
 def pods_monitor(queue):
     while True:
         try:
-            r = requests.get('{base}/api/v1/pods?watch=true'.format(base=kubeapi_uri),
-                             stream=True, verify=verify_ssl, auth=kube_auth)
-            for line in r.iter_lines():
+            req = requests.get('{base}/api/v1/pods?watch=true'.format(base=KUBEAPI_URI),
+                               stream=True, verify=VERIFY_SSL, auth=KUBE_AUTH)
+            for line in req.iter_lines():
                 if line:
                     event = json.loads(line)
                     queue.put(('pod', event))
-        except Exception as e:
-            log.debug(traceback.format_exc())
-            log.error(e)
-            log.error("Sleeping and restarting afresh.")
+        except Exception as err:
+            LOG.debug(traceback.format_exc())
+            LOG.error(err)
+            LOG.error("Sleeping and restarting afresh.")
             time.sleep(10)
 
 
 def nodes_monitor(queue):
     while True:
         try:
-            r = requests.get('{base}/api/v1/nodes?watch=true'.format(base=kubeapi_uri),
-                             stream=True, verify=verify_ssl, auth=kube_auth)
-            for line in r.iter_lines():
+            req = requests.get('{base}/api/v1/nodes?watch=true'.format(base=KUBEAPI_URI),
+                               stream=True, verify=VERIFY_SSL, auth=KUBE_AUTH)
+            for line in req.iter_lines():
                 if line:
                     event = json.loads(line)
                     queue.put(('node', event))
-        except Exception as e:
-            log.debug(traceback.format_exc())
-            log.error(e)
-            log.error("Sleeping and restarting afresh.")
+        except Exception as err:
+            LOG.debug(traceback.format_exc())
+            LOG.error(err)
+            LOG.error("Sleeping and restarting afresh.")
             time.sleep(10)
 
 
@@ -170,131 +171,166 @@ def get_node_ip(event):
 def get_service_list():
     while True:
         try:
-            r = requests.get('{base}/api/v1/services'.format(base=kubeapi_uri), verify=verify_ssl, auth=kube_auth)
-            services_dict = json.loads(r.content)
+            req = requests.get('{base}/api/v1/services'
+                               .format(base=KUBEAPI_URI), verify=VERIFY_SSL, auth=KUBE_AUTH)
+            services_dict = json.loads(req.content)
             list_def = {}
+            service = ''
             for index, service in enumerate(services_dict['items']):
-                list_def[index] = services_dict['items'][index]['metadata']['name']
+                list_def[index] = services_dict['items'][index]['metadata']['labels']['service'] \
+                                  + '-' \
+                                  + services_dict['items'][index]['metadata']['labels']['environment'] \
+                                  + ':' \
+                                  + services_dict['items'][index]['metadata']['labels']['version']
+            LOG.debug(service)
             return json.dumps(list_def)
-        except Exception as e:
-            log.debug(traceback.format_exc())
-            log.error(e)
-            log.error("Sleeping and restarting afresh.")
+        except Exception as err:
+            LOG.debug(traceback.format_exc())
+            LOG.error(err)
+            LOG.error("Sleeping and restarting afresh.")
             time.sleep(10)
+
+
+def url_beautify(url_string):
+    return url_string.replace('"', '')
 
 
 def register_node(event):
-    r = ''
+    req = ''
     while True:
         try:
             node_ip = get_node_ip(event)
-            services = json.loads(get_service_list())
-            agent_base = consul_uri
-            for service in services:
-                port = get_node_port(services[service])
-                weight = get_weight_label(services[service])
+            svcs = json.loads(get_service_list())
+            agent_base = CONSUL_URI
+            for serv in svcs:
+                port = get_node_port(svcs[serv])
+                weight = get_weight_label(svcs[serv])
                 if port != 0:
                     url = 'http://' + node_ip + ':' + str(port)
-                    if consul_token:
-                        r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url?token='
-                                         '{token}'.format(base=agent_base, token=consul_token,
-                                                          traefik=traefik_path, app_name=services[service],
-                                                          host=node_ip),
-                                         json=url, auth=consul_auth, verify=verify_ssl,
-                                         allow_redirects=True)
-                        r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/weight?token='
-                                         '{token}'.format(base=agent_base, token=consul_token,
-                                                          traefik=traefik_path, app_name=services[service],
-                                                          host=node_ip),
-                                         json=weight, auth=consul_auth, verify=verify_ssl,
-                                         allow_redirects=True)
+                    if CONSUL_TOKEN:
+                        req = requests.put('{base}/v1/kv/{TRAEFIK}/backends/{app_name}/servers/'
+                                           '{host}/url?token={token}'.format(base=agent_base,
+                                                                             token=CONSUL_TOKEN,
+                                                                             TRAEFIK=TRAEFIK,
+                                                                             app_name=svcs[serv],
+                                                                             host=node_ip),
+                                           data=url_beautify(url),
+                                           auth=CONSUL_AUTH, verify=VERIFY_SSL,
+                                           allow_redirects=True)
+                        req = requests.put('{base}/v1/kv/{TRAEFIK}/backends/{app_name}/servers/'
+                                           '{host}/weight?token={token}'.format(base=agent_base,
+                                                                                token=CONSUL_TOKEN,
+                                                                                TRAEFIK=TRAEFIK,
+                                                                                app_name=svcs[serv],
+                                                                                host=node_ip),
+                                           data=weight, auth=CONSUL_AUTH, verify=VERIFY_SSL,
+                                           allow_redirects=True)
                     else:
-                        r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url'
-                                         .format(base=agent_base, traefik=traefik_path, app_name=services[service],
-                                                 host=node_ip),
-                                         json=url, auth=consul_auth, verify=verify_ssl,
-                                         allow_redirects=True)
-                        r = requests.put('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/weight'
-                                         .format(base=agent_base, traefik=traefik_path, app_name=services[service],
-                                                 host=node_ip),
-                                         json=weight, auth=consul_auth, verify=verify_ssl,
-                                         allow_redirects=True)
-                    print "Service " + services[service] + " on node " + node_ip + "registered."
+                        req = requests.put('{base}/v1/kv/{TRAEFIK}/backends/{app_name}/servers/'
+                                           '{host}/url'.format(base=agent_base,
+                                                               TRAEFIK=TRAEFIK,
+                                                               app_name=svcs[serv],
+                                                               host=node_ip),
+                                           data=url_beautify(url),
+                                           auth=CONSUL_AUTH, verify=VERIFY_SSL,
+                                           allow_redirects=True)
+                        req = requests.put('{base}/v1/kv/{TRAEFIK}/backends/{app_name}/servers/'
+                                           '{host}/weight'.format(base=agent_base,
+                                                                  TRAEFIK=TRAEFIK,
+                                                                  app_name=svcs[serv],
+                                                                  host=node_ip),
+                                           data=weight, auth=CONSUL_AUTH, verify=VERIFY_SSL,
+                                           allow_redirects=True)
+                    print "Service " + svcs[serv] + " on node " + node_ip + "registered."
                 else:
-                    print "Skipping " + services[service] + " registration on node " + node_ip + ". nodePort not found."
+                    print "Skipping " + svcs[serv] + " registration on node " + node_ip + \
+                          ". nodePort not found."
             break
 
-        except Exception as e:
-            log.debug(traceback.format_exc())
-            log.error(e.message)
-            log.error("Sleeping and retrying.")
+        except Exception as err:
+            LOG.debug(traceback.format_exc())
+            LOG.error(err.message)
+            LOG.error("Sleeping and retrying.")
             time.sleep(10)
 
-        if r.status_code == 200:
-            log.info("ADDED service {service} to Consul's catalog".format(service=node_ip))
+        if req.status_code == 200:
+            LOG.info("ADDED service {service} to Consul's catalog".format(service=node_ip))
         else:
-            log.error("Consul returned non-200 request status code. Could not register service "
+            LOG.error("Consul returned non-200 request status code. Could not register service "
                       "{service}. Continuing on to the next service...".format(service=node_ip))
         sys.stdout.flush()
 
 
 def deregister_node(event):
-    r = ''
+    req = ''
     print "Deregistering node..."
     while True:
         try:
             node_ip = get_node_ip(event)
-            services = json.loads(get_service_list())
-            agent_base = consul_uri
-            for service in services:
-                if consul_token:
-                    r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url?token='
-                                        '{token}'.format(base=agent_base, token=consul_token,
-                                                         traefik=traefik_path, app_name=services[service],
-                                                         host=node_ip),
-                                        auth=consul_auth, verify=verify_ssl,
-                                        allow_redirects=True)
-                    r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/weight?token='
-                                        '{token}'.format(base=agent_base, token=consul_token,
-                                                         traefik=traefik_path, app_name=services[service],
-                                                         host=node_ip),
-                                        auth=consul_auth, verify=verify_ssl,
-                                        allow_redirects=True)
-                    r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}?token='
-                                        '{token}'.format(base=agent_base, token=consul_token,
-                                                         traefik=traefik_path, app_name=services[service],
-                                                         host=node_ip),
-                                        auth=consul_auth, verify=verify_ssl,
-                                        allow_redirects=True)
+            svcs = json.loads(get_service_list())
+            agent_base = CONSUL_URI
+            for serv in svcs:
+                if CONSUL_TOKEN:
+                    req = requests.delete('{base}/v1/kv/{TRAEFIK}/backends/{app_name}/servers/'
+                                          '{host}/url?token={token}'.format(base=agent_base,
+                                                                            token=CONSUL_TOKEN,
+                                                                            TRAEFIK=TRAEFIK,
+                                                                            app_name=svcs[serv],
+                                                                            host=node_ip),
+                                          auth=CONSUL_AUTH, verify=VERIFY_SSL,
+                                          allow_redirects=True)
+                    req = requests.delete('{base}/v1/kv/{TRAEFIK}/backends/{app_name}/servers/'
+                                          '{host}/weight?token={token}'.format(base=agent_base,
+                                                                               token=CONSUL_TOKEN,
+                                                                               TRAEFIK=TRAEFIK,
+                                                                               app_name=svcs[serv],
+                                                                               host=node_ip),
+                                          auth=CONSUL_AUTH, verify=VERIFY_SSL,
+                                          allow_redirects=True)
+                    req = requests.delete('{base}/v1/kv/{TRAEFIK}/backends/{app_name}/servers/'
+                                          '{host}?token={token}'.format(base=agent_base,
+                                                                        token=CONSUL_TOKEN,
+                                                                        TRAEFIK=TRAEFIK,
+                                                                        app_name=svcs[serv],
+                                                                        host=node_ip),
+                                          auth=CONSUL_AUTH, verify=VERIFY_SSL,
+                                          allow_redirects=True)
                 else:
-                    r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/url'
-                                        .format(base=agent_base, traefik=traefik_path, app_name=services[service],
-                                                host=node_ip),
-                                        auth=consul_auth, verify=verify_ssl,
-                                        allow_redirects=True)
-                    r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}/weight'
-                                        .format(base=agent_base, traefik=traefik_path, app_name=services[service],
-                                                host=node_ip),
-                                        auth=consul_auth, verify=verify_ssl,
-                                        allow_redirects=True)
-                    r = requests.delete('{base}/v1/kv/{traefik}/backends/{app_name}/servers/{host}'
-                                        .format(base=agent_base, traefik=traefik_path, app_name=services[service],
-                                                host=node_ip),
-                                        auth=consul_auth, verify=verify_ssl,
-                                        allow_redirects=True)
-                print "Node {node} deregistered for service {service}".format(node=node_ip, service=services[service])
+                    req = requests.delete('{base}/v1/kv/{TRAEFIK}/backends/{app_name}/servers/'
+                                          '{host}/url'.format(base=agent_base,
+                                                              TRAEFIK=TRAEFIK,
+                                                              app_name=svcs[serv],
+                                                              host=node_ip),
+                                          auth=CONSUL_AUTH, verify=VERIFY_SSL,
+                                          allow_redirects=True)
+                    req = requests.delete('{base}/v1/kv/{TRAEFIK}/backends/{app_name}/servers/'
+                                          '{host}/weight'.format(base=agent_base,
+                                                                 TRAEFIK=TRAEFIK,
+                                                                 app_name=svcs[serv],
+                                                                 host=node_ip),
+                                          auth=CONSUL_AUTH, verify=VERIFY_SSL,
+                                          allow_redirects=True)
+                    req = requests.delete('{base}/v1/kv/{TRAEFIK}/backends/{app_name}/servers/'
+                                          '{host}'.format(base=agent_base,
+                                                          TRAEFIK=TRAEFIK,
+                                                          app_name=svcs[serv],
+                                                          host=node_ip),
+                                          auth=CONSUL_AUTH, verify=VERIFY_SSL,
+                                          allow_redirects=True)
+                print "Node {node} deregistered for service {service}"\
+                    .format(node=node_ip, service=svcs[serv])
             break
 
-        except Exception as e:
-            log.debug(traceback.format_exc())
-            log.error(e.message)
-            log.error("Sleeping and retrying.")
+        except Exception as err:
+            LOG.debug(traceback.format_exc())
+            LOG.error(err.message)
+            LOG.error("Sleeping and retrying.")
             time.sleep(10)
 
-        if r.status_code == 200:
-            log.info("DEREGISTERED node {service} to Consul's catalog".format(service=node_ip))
+        if req.status_code == 200:
+            LOG.info("DEREGISTERED node {service} to Consul's catalog".format(service=node_ip))
         else:
-            log.error("Consul returned non-200 request status code. Could not deregister node "
+            LOG.error("Consul returned non-200 request status code. Could not deregister node "
                       "{service}. Continuing on to the next node...".format(service=node_ip))
         sys.stdout.flush()
 
@@ -316,23 +352,22 @@ def registration(queue):
                     deregister_node(event)
                 elif event['object']['status']['conditions'][2]['status'] == 'Unknown':
                     deregister_node(event)
-                      
         elif context == 'pod':
             pass
-        
-        
+
+
 def run():
-    q = Queue()
+    eventq = Queue()
     # services_watch = Process(target=services_monitor, args=(q,), name='kube2pyconsul/services')
     # pods_watch = Process(target=pods_monitor, args=(q,), name='kube2pyconsul/pods')
-    nodes_watch = Process(target=nodes_monitor, args=(q,), name='kube2pyconsul/nodes')
-    consul_desk = Process(target=registration, args=(q,), name='kube2pyconsul/registration')
-    
+    nodes_watch = Process(target=nodes_monitor, args=(eventq,), name='kube2pyconsul/nodes')
+    consul_desk = Process(target=registration, args=(eventq,), name='kube2pyconsul/registration')
+
     # services_watch.start()
     # pods_watch.start()
     nodes_watch.start()
     consul_desk.start()
-    
+
     try:
         while True:
             time.sleep(10)
@@ -341,7 +376,7 @@ def run():
         # pods_watch.terminate()
         nodes_watch.terminate()
         consul_desk.terminate()
-        
+
         exit()
 
 if __name__ == '__main__':
