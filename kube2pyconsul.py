@@ -15,7 +15,7 @@ Options:
   --kube-auth=<user,pass>      Kubernetes http auth credentials [default: None]
   --verify-ssl	       	       Verify SSL or not when connecting to APIs [default: False]
   --consul-token=token         Token for ACL enabled consul
-  --TRAEFIK-kv-path=path       root key of TRAEFIK config in Consul KV
+  --traefik-kv-path=path       root key of TRAEFIK config in Consul KV
 
 """
 import sys
@@ -42,7 +42,7 @@ LOG.setLevel(LEVEL)
 CONSUL_URI = ARGS['--consul-agent']
 CONSUL_AUTH = tuple(ARGS['--consul-auth'].split(',')) if ARGS['--consul-auth'] != 'None' else None
 CONSUL_TOKEN = ARGS['--consul-token']
-TRAEFIK = ARGS['--TRAEFIK-kv-path']
+TRAEFIK = ARGS['--traefik-kv-path']
 
 KUBEAPI_URI = ARGS['--kube-master']
 KUBE_AUTH = tuple(ARGS['--kube-auth'].split(',')) if ARGS['--kube-auth'] != 'None' else None
