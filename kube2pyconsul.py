@@ -195,8 +195,8 @@ def get_service_list():
             list_def = {}
             service = ''
             for idx, service in enumerate(svs['items']):
-                if 'router' in svs['items'][idx]['metadata']['labels'] \
-                        and svs['items'][idx]['metadata']['labels']['router'] == 'traefik':
+                if 'router' in svs['items'][idx]['metadata']['labels']:
+                    if svs['items'][idx]['metadata']['labels']['router'] == 'traefik':
                         list_def[idx] = svs['items'][idx]['metadata']['labels']['service'] \
                                         + '-' \
                                         + svs['items'][idx]['metadata']['labels']['environment'] \
