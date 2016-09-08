@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
       - name: kube2consul
-        image: mkozinenko/kube2consul
+        image: {{ kube2consul_image }}
         resources:
           limits:
             cpu: 100m
