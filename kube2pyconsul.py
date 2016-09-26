@@ -3,7 +3,7 @@
 Usage:
   kube2pyconsul.py [-v <loglevel>] [--verify-ssl] [--consul-agent=<consul-uri>]
   [--kube-master=<kubeapi-uri>] [--consul-auth=<user,pass>] [--kube-auth=<user,pass>]
-  [--consul-token=token] [--TRAEFIK-kv-path=path]
+  [--consul-token=token] [--traefik-kv-path=path]
   kube2pyconsul.py (-h | --help)
 
 Options:
@@ -218,8 +218,7 @@ def url_beautify(url_string):
 
 def register_node(event):
     """Registers node for traefik for all services to make it act as backend"""
-    req = None
-    req.response = 0
+    req = ''
     while True:
         try:
             node_ip = get_node_ip(event)
