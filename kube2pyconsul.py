@@ -285,8 +285,7 @@ def register_node(event):
 
 def deregister_node(event):
     """Removes node from KV to exclude it from traefik backends"""
-    req = None
-    req.response = 0
+    req = ''
     print "Deregistering node..."
     while True:
         try:
