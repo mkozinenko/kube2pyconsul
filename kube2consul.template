@@ -27,10 +27,10 @@ spec:
             cpu: 100m
             memory: 50Mi
         args:
-        - <%= consul_agent_url %>
-        - <%= kube_master_url %>
-        - <%= kube_auth %>
-        - <%= consul_token %>
+         <%= consul_agent_url %>
+         <%= kube_master_url %>
+         <%= kube_auth %>
+         <%= consul_token %>
         securityContext:
           privileged: true
       dnsPolicy: Default
